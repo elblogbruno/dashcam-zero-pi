@@ -66,8 +66,11 @@ def main(args=None):
         controls,
         parsed_args.tuning_filter,
         parsed_args.tuning_filter_dir)
+    
+    clip_width, clip_height = split_resolution(parsed_args.clip_resolution)
+    clip_duration = parsed_args.clip_duration
 
-    start_recording_thread(picam2, (width, height), parsed_args.fps, 10, parsed_args.clips_folder)
+    start_recording_thread(picam2, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.qf, parsed_args.clips_folder, clip_duration)
 
     output = StreamingOutput()
     picam2.start_recording(MJPEGEncoder(), FileOutput(output))
@@ -133,7 +136,7 @@ def _get_recording_encoder(resolution, fps, qf):
 #         cv2.putText(m.array, timestamp, origin, font, scale, colour, thickness)
 #         cv2.putText(m.array, "FPS: {}".format(self.fps_calc), (0, 60), font, scale, colour, thickness)
 
-def _start_recording(picam2, resolution, fps, qf, clips_folder):
+def _start_recording(picam2, resolution, fps, qf, clips_folder, clip_duration):
     import datetime
     import os
     from multiprocessing.pool import ThreadPool
@@ -153,7 +156,7 @@ def _start_recording(picam2, resolution, fps, qf, clips_folder):
 
         picam2.start_encoder(encoder, clip_path_mp4, name="main")
 
-        sleep(5)
+        sleep(clip_duration)
 
         # self.api.stop_recording()
         picam2.stop_encoder() 
@@ -163,9 +166,9 @@ def _start_recording(picam2, resolution, fps, qf, clips_folder):
     picam2.stop_preview()
 
 
-def start_recording_thread(picam2, resolution, fps, qf, clips_folder):
+def start_recording_thread(picam2, resolution, fps, qf, clips_folder, clip_duration):
     import threading
-    thread = threading.Thread(target=_start_recording, args=(picam2, resolution, fps, qf, clips_folder))
+    thread = threading.Thread(target=_start_recording, args=(picam2, resolution, fps, qf, clips_folder, clip_duration))
     thread.start()
 
 def resolution_type(arg_value, pat=re.compile(r"^\d+x\d+$")):
@@ -279,6 +282,11 @@ def get_parser():
                         help='Set the directory to look for tuning filters.')
     parser.add_argument('--list-controls', action='store_true', help='List available camera controls and exits.')
     parser.add_argument('--clips_folder', type=str, default="clips", help='Folder to store DVR clips.')
+    parser.add_argument('-qf', '--quality_factor', type=int, default=20, help='Quality factor for the video recording.')
+    parser.add_argument('--clip_duration', type=int, default=10, help='Duration of each clip in seconds.')
+    parser.add_argument('--clip_fps', type=int, default=30, help='Frames per second of the video recording.')
+    parser.add_argument('--clip_resolution', type=resolution_type, default='640x480',
+                        help='Resolution of the images width x height. Maximum is 1920x1920.')
 
     return parser
 
