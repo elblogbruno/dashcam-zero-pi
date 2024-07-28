@@ -62,6 +62,7 @@ def run_server(bind_address,
                 self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
                 self.end_headers()
                 while True:
+                    camera.start()
                     with output.condition:
                         output.condition.wait()
                         frame = output.frame

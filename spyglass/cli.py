@@ -72,18 +72,8 @@ def main(args=None):
 
     start_recording_thread(picam2, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, parsed_args.clips_folder, clip_duration)
 
-    main_stream_thread(picam2, bind_address, port, width, height, stream_url, snapshot_url, orientation_exif)
-
-def main_stream_thread(picam2, bind_address, port, width, height, stream_url, snapshot_url, orientation_exif):
-    import threading
-    thread = threading.Thread(target=_main_stream, args=(picam2, bind_address, port, width, height, stream_url, snapshot_url, orientation_exif))
-    thread.start()
-
-def _main_stream(picam2, bind_address, port, width, height, stream_url, snapshot_url, orientation_exif):
     output = StreamingOutput()
     picam2.start_recording(MJPEGEncoder(), FileOutput(output))
-
-
 
     try:
         run_server(bind_address, port, picam2, output, stream_url, snapshot_url, orientation_exif)
