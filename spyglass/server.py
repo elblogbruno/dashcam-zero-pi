@@ -62,8 +62,8 @@ def run_server(bind_address,
                 self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
                 self.end_headers()
                 while True:
-                    camera.start()
                     with output.condition:
+                        logging.debug('Waiting for frame')
                         output.condition.wait()
                         frame = output.frame
                     self.wfile.write(b'--FRAME\r\n')
