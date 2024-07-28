@@ -152,7 +152,8 @@ def _start_recording(picam2, resolution, fps, qf, clips_folder, clip_duration):
 
         clip_path_mp4 = os.path.join(clips_folder, clip_name + ".mp4")
 
-        print("Recording clip: " + clip_name)
+        # print("Recording clip: " + clip_name)
+        logging.info("Recording clip: " + clip_name)
 
         picam2.start_encoder(encoder, clip_path_mp4, name="main")
 
@@ -160,8 +161,9 @@ def _start_recording(picam2, resolution, fps, qf, clips_folder, clip_duration):
 
         # self.api.stop_recording()
         picam2.stop_encoder() 
+        logging.info("Finished recording clip: " + clip_name)
 
-        print("Finished recording clip: " + clip_name)
+        # print("Finished recording clip: " + clip_name)
 
     picam2.stop_preview()
 
