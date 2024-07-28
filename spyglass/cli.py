@@ -70,7 +70,7 @@ def main(args=None):
     clip_width, clip_height = split_resolution(parsed_args.clip_resolution)
     clip_duration = parsed_args.clip_duration
 
-    start_recording_thread(picam2, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.qf, parsed_args.clips_folder, clip_duration)
+    start_recording_thread(picam2, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, parsed_args.clips_folder, clip_duration)
 
     output = StreamingOutput()
     picam2.start_recording(MJPEGEncoder(), FileOutput(output))
