@@ -9,7 +9,7 @@ import sys
 
 import libcamera
 
-from picamera2.encoders import MJPEGEncoder
+from picamera2.encoders import MJPEGEncoder, H264Encoder
 from picamera2.outputs import FileOutput
 
 from spyglass.exif import option_to_exif_orientation
@@ -50,6 +50,8 @@ def main(args=None):
     if parsed_args.list_controls:
         print('Available controls:\n'+camera_options.get_libcamera_controls_string(0))
         return
+    
+    init_dvr(parsed_args)
 
     picam2 = init_camera(
         width,
@@ -65,8 +67,12 @@ def main(args=None):
         parsed_args.tuning_filter,
         parsed_args.tuning_filter_dir)
 
+    start_recording_thread(picam2, (width, height), parsed_args.fps, 10, parsed_args.clips_folder)
+
     output = StreamingOutput()
     picam2.start_recording(MJPEGEncoder(), FileOutput(output))
+
+
 
     try:
         run_server(bind_address, port, picam2, output, stream_url, snapshot_url, orientation_exif)
@@ -75,7 +81,85 @@ def main(args=None):
 
 
 # region args parsers
+def init_dvr(args):
+    # get the DVR clips folder
+    clips_folder = args.clips_folder
 
+    if clips_folder is None:
+        logging.error("No clips folder specified. Exiting.")
+        sys.exit(1)
+
+    # check if the folder exists
+    if not clips_folder.exists():
+        logging.error(f"Clips folder {clips_folder} does not exist. Creating it.")
+        clips_folder.mkdir(parents=True, exist_ok=True)
+
+    # check if the folder is writable
+    if not clips_folder.is_dir() or not clips_folder.is_writable():
+        logging.error(f"Clips folder {clips_folder} is not writable. Exiting.")
+        sys.exit(1)
+
+def _get_recording_encoder(resolution, fps, qf):
+    print("resolution: ", resolution)
+    print("fps: ", fps)
+    print("qf: ", qf)
+
+    res_qf = (resolution[0] * resolution[1]) / (1920 * 1080)
+    fps_qf = (30 /  fps) *  fps
+    bit_rate = int(fps_qf*qf*res_qf*1024*1024)
+
+    print("bit_rate: ", bit_rate)
+
+    # encoder = MJPEGEncoder(bit_rate) if self.hw_encode else JpegEncoder(bit_rate)
+    encoder = H264Encoder(bitrate=bit_rate)
+    return encoder
+
+# def apply_timestamp(self, request):
+#     colour = (255, 255, 255)
+#     origin = (0, 30)
+#     font = cv2.FONT_HERSHEY_SIMPLEX
+#     scale = 1
+#     thickness = 2
+    
+#     timestamp = time.strftime("%Y-%m-%d %X")
+#     with MappedArray(request, "main") as m:
+#         cv2.putText(m.array, timestamp, origin, font, scale, colour, thickness)
+#         cv2.putText(m.array, "FPS: {}".format(self.fps_calc), (0, 60), font, scale, colour, thickness)
+
+def _start_recording(picam2, resolution, fps, qf, clips_folder):
+    import datetime
+    import os
+    from multiprocessing.pool import ThreadPool
+    from time import sleep
+    encoder = _get_recording_encoder(resolution, fps, qf)
+     
+    picam2.start()
+
+    # self.api.pre_callback = self.apply_timestamp
+
+    while True:
+        clip_name = "clip_" + str(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+
+        clip_path_mp4 = os.path.join(clips_folder, clip_name + ".mp4")
+
+        print("Recording clip: " + clip_name)
+
+        picam2.start_encoder(encoder, clip_path_mp4, name="main")
+
+        sleep(5)
+
+        # self.api.stop_recording()
+        picam2.stop_encoder() 
+
+        print("Finished recording clip: " + clip_name)
+
+    picam2.stop_preview()
+
+
+def start_recording_thread(picam2, resolution, fps, qf, clips_folder):
+    import threading
+    thread = threading.Thread(target=_start_recording, args=(picam2, resolution, fps, qf, clips_folder))
+    thread.start()
 
 def resolution_type(arg_value, pat=re.compile(r"^\d+x\d+$")):
     if not pat.match(arg_value):
@@ -187,6 +271,7 @@ def get_parser():
     parser.add_argument('-tfd', '--tuning_filter_dir', type=str, default=None, nargs='?',const="",
                         help='Set the directory to look for tuning filters.')
     parser.add_argument('--list-controls', action='store_true', help='List available camera controls and exits.')
+    parser.add_argument('--clips_folder', type=str, default="clips", help='Folder to store DVR clips.')
 
     return parser
 
