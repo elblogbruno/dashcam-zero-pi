@@ -85,17 +85,24 @@ def init_dvr(args):
     # get the DVR clips folder
     clips_folder = args.clips_folder
 
+    import os
+
     if clips_folder is None:
         logging.error("No clips folder specified. Exiting.")
         sys.exit(1)
 
     # check if the folder exists
-    if not clips_folder.exists():
+    if not os.path.exists(clips_folder):
         logging.error(f"Clips folder {clips_folder} does not exist. Creating it.")
-        clips_folder.mkdir(parents=True, exist_ok=True)
+        try:
+            os.mkdir(clips_folder)
+        except OSError as e:
+            logging.exception(e)
+            logging.error(f"Failed to create clips folder {clips_folder}. Exiting.")
+            sys.exit(1)
 
     # check if the folder is writable
-    if not clips_folder.is_dir() or not clips_folder.is_writable():
+    if not os.access(clips_folder, os.W_OK):
         logging.error(f"Clips folder {clips_folder} is not writable. Exiting.")
         sys.exit(1)
 
