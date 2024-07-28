@@ -73,8 +73,8 @@ def main(args=None):
     start_recording_thread(picam2, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, parsed_args.clips_folder, clip_duration)
 
     output = StreamingOutput()
-    picam2.start_recording(MJPEGEncoder(), FileOutput(output))
-
+    picam2.start_encoder(MJPEGEncoder(), FileOutput(output))
+    picam2.start()
 
 
     try:
@@ -143,7 +143,7 @@ def _start_recording(picam2, resolution, fps, qf, clips_folder, clip_duration):
     from time import sleep
     encoder = _get_recording_encoder(resolution, fps, qf)
      
-    picam2.start()
+    # picam2.start()
 
     # self.api.pre_callback = self.apply_timestamp
 
