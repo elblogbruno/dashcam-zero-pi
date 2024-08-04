@@ -18,7 +18,10 @@ from spyglass.camera import init_camera
 from spyglass.server import StreamingOutput
 from spyglass.server import run_server
 from spyglass import camera_options
+from spyglass.dvr import DVR
+from spyglass.timestamp import apply_timestamp
 
+import time
 
 MAX_WIDTH = 1920
 MAX_HEIGHT = 1920
@@ -40,7 +43,10 @@ def main(args=None):
 
     bind_address = parsed_args.bindaddress
     port = parsed_args.port
-    width, height = split_resolution(parsed_args.resolution)
+
+    stream_width, stream_height = split_resolution(parsed_args.resolution)
+    clip_width, clip_height = split_resolution(parsed_args.clip_resolution)
+
     stream_url = parsed_args.stream_url
     snapshot_url = parsed_args.snapshot_url
     orientation_exif = parsed_args.orientation_exif
@@ -51,11 +57,12 @@ def main(args=None):
         print('Available controls:\n'+camera_options.get_libcamera_controls_string(0))
         return
     
-    init_dvr(parsed_args)
 
     picam2 = init_camera(
-        width,
-        height,
+        clip_width,
+        clip_height,
+        stream_width,
+        stream_height,
         parsed_args.fps,
         parse_autofocus(parsed_args.autofocus),
         parsed_args.lensposition,
@@ -67,111 +74,28 @@ def main(args=None):
         parsed_args.tuning_filter,
         parsed_args.tuning_filter_dir)
     
-    clip_width, clip_height = split_resolution(parsed_args.clip_resolution)
     clip_duration = parsed_args.clip_duration
 
-    start_recording_thread(picam2, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, parsed_args.clips_folder, clip_duration)
-
-    output = StreamingOutput()
-    picam2.start_encoder(MJPEGEncoder(), FileOutput(output))
+    # output = StreamingOutput()
+    # picam2.start_recording(MJPEGEncoder(), FileOutput(output))
+    picam2.pre_callback = apply_timestamp
     picam2.start()
+    # time.sleep(1)
 
+    # init_dvr(parsed_args)
+    
+    # start_recording_thread(picam2, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, parsed_args.clips_folder, clip_duration)
+
+    dvr = DVR(picam2, parsed_args.clips_folder, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, clip_duration)
+    # dvr.start_recording_thread()
 
     try:
-        run_server(bind_address, port, picam2, output, stream_url, snapshot_url, orientation_exif)
+        run_server(bind_address, port, picam2, dvr, stream_url, snapshot_url, orientation_exif)
     finally:
         picam2.stop_recording()
 
 
-# region args parsers
-def init_dvr(args):
-    # get the DVR clips folder
-    clips_folder = args.clips_folder
 
-    import os
-
-    if clips_folder is None:
-        logging.error("No clips folder specified. Exiting.")
-        sys.exit(1)
-
-    # check if the folder exists
-    if not os.path.exists(clips_folder):
-        logging.error(f"Clips folder {clips_folder} does not exist. Creating it.")
-        try:
-            os.mkdir(clips_folder)
-        except OSError as e:
-            logging.exception(e)
-            logging.error(f"Failed to create clips folder {clips_folder}. Exiting.")
-            sys.exit(1)
-
-    # check if the folder is writable
-    if not os.access(clips_folder, os.W_OK):
-        logging.error(f"Clips folder {clips_folder} is not writable. Exiting.")
-        sys.exit(1)
-
-def _get_recording_encoder(resolution, fps, qf):
-    print("resolution: ", resolution)
-    print("fps: ", fps)
-    print("qf: ", qf)
-
-    res_qf = (resolution[0] * resolution[1]) / (1920 * 1080)
-    fps_qf = (30 /  fps) *  fps
-    bit_rate = int(fps_qf*qf*res_qf*1024*1024)
-
-    print("bit_rate: ", bit_rate)
-
-    # encoder = MJPEGEncoder(bit_rate) if self.hw_encode else JpegEncoder(bit_rate)
-    encoder = H264Encoder(bitrate=bit_rate)
-    return encoder
-
-# def apply_timestamp(self, request):
-#     colour = (255, 255, 255)
-#     origin = (0, 30)
-#     font = cv2.FONT_HERSHEY_SIMPLEX
-#     scale = 1
-#     thickness = 2
-    
-#     timestamp = time.strftime("%Y-%m-%d %X")
-#     with MappedArray(request, "main") as m:
-#         cv2.putText(m.array, timestamp, origin, font, scale, colour, thickness)
-#         cv2.putText(m.array, "FPS: {}".format(self.fps_calc), (0, 60), font, scale, colour, thickness)
-
-def _start_recording(picam2, resolution, fps, qf, clips_folder, clip_duration):
-    import datetime
-    import os
-    from multiprocessing.pool import ThreadPool
-    from time import sleep
-    encoder = _get_recording_encoder(resolution, fps, qf)
-     
-    # picam2.start()
-
-    # self.api.pre_callback = self.apply_timestamp
-
-    while True:
-        clip_name = "clip_" + str(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
-
-        clip_path_mp4 = os.path.join(clips_folder, clip_name + ".mp4")
-
-        # print("Recording clip: " + clip_name)
-        logging.info("Recording clip: " + clip_name)
-
-        picam2.start_encoder(encoder, clip_path_mp4, name="main")
-
-        sleep(clip_duration)
-
-        # self.api.stop_recording()
-        picam2.stop_encoder() 
-        logging.info("Finished recording clip: " + clip_name)
-
-        # print("Finished recording clip: " + clip_name)
-
-    picam2.stop_preview()
-
-
-def start_recording_thread(picam2, resolution, fps, qf, clips_folder, clip_duration):
-    import threading
-    thread = threading.Thread(target=_start_recording, args=(picam2, resolution, fps, qf, clips_folder, clip_duration))
-    thread.start()
 
 def resolution_type(arg_value, pat=re.compile(r"^\d+x\d+$")):
     if not pat.match(arg_value):
@@ -287,7 +211,7 @@ def get_parser():
     parser.add_argument('-qf', '--quality_factor', type=int, default=20, help='Quality factor for the video recording.')
     parser.add_argument('--clip_duration', type=int, default=10, help='Duration of each clip in seconds.')
     parser.add_argument('--clip_fps', type=int, default=30, help='Frames per second of the video recording.')
-    parser.add_argument('--clip_resolution', type=resolution_type, default='640x480',
+    parser.add_argument('--clip_resolution', type=resolution_type, default='1920x1080',
                         help='Resolution of the images width x height. Maximum is 1920x1920.')
 
     return parser

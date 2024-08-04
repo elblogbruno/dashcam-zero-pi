@@ -8,51 +8,103 @@ from spyglass.exif import create_exif_header
 from spyglass.camera_options import parse_dictionary_to_html_page, process_controls
 from . import logger
 import uvicorn
+from picamera2.encoders import MJPEGEncoder 
+from picamera2.outputs import FileOutput
+from spyglass.timestamp import apply_timestamp
+
+from spyglass.dvr import DVR
+
+import time
+import asyncio
 
 class StreamingOutput(io.BufferedIOBase):
     def __init__(self):
         self.frame = None
-        self.condition = Condition()
+        self.event = asyncio.Event()
 
     def write(self, buf):
-        with self.condition:
-            self.frame = buf
-            self.condition.notify_all()
+        self.frame = buf
+        self.event.set()
+
+    async def read(self):
+        await self.event.wait()
+        self.event.clear()
+        return self.frame
 
 
-app = FastAPI()
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+import asyncio
+
+
+# async def print_task(s): 
+#     while True:
+#         print('Hello')
+#         await asyncio.sleep(s)
+
+        
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Run at startup
+    asyncio.create_task(dvr.start_recording())
+    yield
+    # Run on shutdown (if required)
+    print('Shutting down...')
+
+
+app = FastAPI(lifespan=lifespan)
+# app = FastAPI()
+
 output = StreamingOutput()
 exif_header = create_exif_header(0)
 
 camera = None
 bind_address = None
 port = None
-
+dvr = None
 
 @app.get("/stream")
 async def stream(request: Request):
+    print("Starting streaming again.")
+
+    output = StreamingOutput()
+    encoder = MJPEGEncoder()
+    camera.pre_callback = apply_timestamp
+    camera.start_encoder(encoder, FileOutput(output), name="lores")
+    # camera.start()
+
+    time.sleep(1)
+
     async def generate():
-        while True:
-            with output.condition:
-                logging.debug('Waiting for frame')
-                output.condition.wait()
-                frame = output.frame
-            yield b'--FRAME\r\n'
-            if exif_header is None:
-                yield frame
-            else:
-                yield exif_header + frame[2:]
-            yield b'\r\n'
+        try:
+            while True:
+                frame = await output.read()
+                # print(f"Frame length: {len(frame)}")  # Debugging frame length
+                yield b'--FRAME\r\n'
+                yield b'Content-Type: image/jpeg\r\n'
+                yield b'Content-Length: ' + str(len(frame)).encode() + b'\r\n'
+                yield b'\r\n' + frame + b'\r\n'
+        except asyncio.CancelledError:
+            print("Client disconnected, stopping recording.")
+            # camera.stop_encoder()
+            encoder.stop()
+            raise
+
+    async def monitor_disconnect():
+        await request.is_disconnected()
+        raise asyncio.CancelledError
+
+    loop = asyncio.get_event_loop()
+    loop.create_task(monitor_disconnect())
 
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=FRAME")
-
 
 @app.get("/snapshot")
 async def snapshot(request: Request):
     with output.condition:
         output.condition.wait()
-        frame = output.frame
-    return StreamingResponse(frame, media_type="image/jpeg")
+        frame = output.frame 
+    return Response(frame, media_type="image/jpeg")
 
 
 @app.get("/controls")
@@ -72,14 +124,17 @@ async def startup_event():
     logger.info('Snapshot endpoint: /snapshot')
     logger.info('Controls endpoint: /controls')
 
+    # dvr.start_recording_thread()
+
 
 def run_server(server_bind_address,
                server_port,
                picamera,
-               pioutput: StreamingOutput,
+               pidvr: DVR,
                stream_url='/stream',
                snapshot_url='/snapshot',
                orientation_exif=0):
+    
     global exif_header
     exif_header = create_exif_header(orientation_exif)
 
@@ -92,7 +147,7 @@ def run_server(server_bind_address,
     global port
     port = server_port
 
-    global output
-    output = pioutput
+    global dvr
+    dvr = pidvr
 
     uvicorn.run(app, host=bind_address, port=port)

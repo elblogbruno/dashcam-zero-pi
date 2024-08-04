@@ -3,8 +3,10 @@ from spyglass.camera_options import process_controls
 from picamera2 import Picamera2
 
 def init_camera(
-        width: int,
-        height: int,
+        clip_width: int,
+        clip_height: int,
+        stream_width: int,
+        stream_height: int,
         fps: int,
         autofocus: str,
         lens_position: float,
@@ -40,6 +42,14 @@ def init_camera(
 
     transform = libcamera.Transform(hflip=int(flip_horizontal or upsidedown), vflip=int(flip_vertical or upsidedown))
 
-    picam2.configure(picam2.create_video_configuration(main={'size': (width, height)}, controls=controls, transform=transform))
+    mode = picam2.sensor_modes[1]
+
+    print(mode)
+
+    picam2.configure(picam2.create_video_configuration(main={'size': (clip_width, clip_height)}, 
+                                                       lores={"size": (stream_width, stream_height)}, 
+                                                       controls=controls, 
+                                                       transform=transform,
+                                                       sensor={'output_size': mode['size'], 'bit_depth': mode['bit_depth']}))
 
     return picam2
