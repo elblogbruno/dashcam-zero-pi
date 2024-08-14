@@ -9,19 +9,17 @@ import sys
 
 import libcamera
 
-from picamera2.encoders import MJPEGEncoder, H264Encoder
-from picamera2.outputs import FileOutput
+# from picamera2.encoders import MJPEGEncoder, H264Encoder
+# from picamera2.outputs import FileOutput
 
 from spyglass.exif import option_to_exif_orientation
 from spyglass.__version__ import __version__
 from spyglass.camera import init_camera
-from spyglass.server import StreamingOutput
+# from spyglass.server import StreamingOutput
 from spyglass.server import run_server
 from spyglass import camera_options
 from spyglass.dvr import DVR
-from spyglass.timestamp import apply_timestamp
-
-import time
+from spyglass.timestamp import Timestamp 
 
 MAX_WIDTH = 1920
 MAX_HEIGHT = 1920
@@ -76,18 +74,21 @@ def main(args=None):
     
     clip_duration = parsed_args.clip_duration
 
+
     # output = StreamingOutput()
     # picam2.start_recording(MJPEGEncoder(), FileOutput(output))
-    picam2.pre_callback = apply_timestamp
-    picam2.start()
+
     # time.sleep(1)
 
     # init_dvr(parsed_args)
     
     # start_recording_thread(picam2, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, parsed_args.clips_folder, clip_duration)
-
-    dvr = DVR(picam2, parsed_args.clips_folder, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, clip_duration)
+    dvr = DVR(picam2, parsed_args.clips_folder, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, clip_duration, parsed_args.gps_serial_port)
     # dvr.start_recording_thread()
+    
+    timestamp = Timestamp(picam2, dvr)
+    picam2.start()
+
 
     try:
         run_server(bind_address, port, picam2, dvr, stream_url, snapshot_url, orientation_exif)
@@ -213,6 +214,7 @@ def get_parser():
     parser.add_argument('--clip_fps', type=int, default=30, help='Frames per second of the video recording.')
     parser.add_argument('--clip_resolution', type=resolution_type, default='1920x1080',
                         help='Resolution of the images width x height. Maximum is 1920x1920.')
+    parser.add_argument('--gps_serial_port', type=str, default='ttyACM0', help='Serial port for GPS data.')
 
     return parser
 

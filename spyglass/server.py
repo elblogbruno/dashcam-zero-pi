@@ -13,6 +13,7 @@ from picamera2.outputs import FileOutput
 from spyglass.timestamp import apply_timestamp
 
 from spyglass.dvr import DVR
+from fastapi.responses import StreamingResponse
 
 import time
 import asyncio
@@ -105,6 +106,18 @@ async def snapshot(request: Request):
         output.condition.wait()
         frame = output.frame 
     return Response(frame, media_type="image/jpeg")
+
+@app.get("/videos")
+async def list_videos(start_time: int = 0, end_time: int = 0):
+    return dvr.list_clips(start_time, end_time)
+
+@app.get("/videos/{clip_id}")
+async def stream_video_clip(clip_id: str):
+    file_path = f"{dvr.clips_folder}/{clip_id}.h264"
+    def iterfile():
+        with open(file_path, "rb") as file_like:
+            yield from file_like
+    return StreamingResponse(iterfile(), media_type="video/mp4")
 
 
 @app.get("/controls")
