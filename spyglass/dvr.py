@@ -112,11 +112,12 @@ class DVR:
             logging.info(f"Gathering GPS data: {self.gps_available} {self.gps_serial.in_waiting}")
 
             if self.gps_available and self.gps_serial.in_waiting:
-                gps_data = self.gps_serial.readline().decode("utf-8")
+                gps_data = self.gps_serial.read_all()
                 try:
-                    gps_data_parsed = pynmea2.parse(gps_data)
-                    self.last_gps_data = gps_data_parsed
-                    logging.info(f"GPS data: {gps_data_parsed}")
+                    if gps_data.startswith(b'$GPGGA'):
+                        gps_data_parsed = pynmea2.parse(gps_data.decode("utf-8"))
+                        self.last_gps_data = gps_data_parsed
+                        logging.info(f"GPS data: {gps_data_parsed}")
                 except pynmea2.ParseError as e:
                     logging.error(f"Failed to parse GPS data: {e}")
 
