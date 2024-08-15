@@ -114,9 +114,9 @@ class DVR:
             if self.gps_available and self.gps_serial.in_waiting:
                 gps_data = self.gps_serial.readline().decode("utf-8")
                 try:
-                    gps_data = pynmea2.parse(gps_data)
-                    self.last_gps_data = gps_data
-                    logging.info(f"GPS data: {gps_data}")
+                    gps_data_parsed = pynmea2.parse(gps_data)
+                    self.last_gps_data = gps_data_parsed
+                    logging.info(f"GPS data: {gps_data_parsed}")
                 except pynmea2.ParseError as e:
                     logging.error(f"Failed to parse GPS data: {e}")
 
@@ -128,17 +128,20 @@ class DVR:
             encoder.stop()
             logging.info(f"Finished recording clip: {clip_name}")
 
-             # use ExifTool to add GPS data to the clip
+            # use ExifTool to add GPS data to the clip
             if self.gps_available and self.last_gps_data:
                 gps_data = self.last_gps_data
-                gps_data_str = f"{gps_data.latitude} {gps_data.longitude}"
-                logging.info(f"Adding GPS data to clip: {gps_data_str}")
-                os.system(f"exiftool -GPSLatitude={gps_data.latitude} -GPSLongitude={gps_data.longitude} -GPSAltitude={gps_data.altitude} -GPSLatitudeRef={gps_data.lat_dir} -GPSLongitudeRef={gps_data.lon_dir} -GPSAltitudeRef={gps_data.altitude_units} {clip_path_mp4}")
-                logging.info(f"Finished adding GPS data to clip: {gps_data_str}")
+                try:
+                    gps_data_str = f"{gps_data.latitude} {gps_data.longitude}"
+                    logging.info(f"Adding GPS data to clip: {gps_data_str}")
+                    os.system(f"exiftool -GPSLatitude={gps_data.latitude} -GPSLongitude={gps_data.longitude} -GPSAltitude={gps_data.altitude} -GPSLatitudeRef={gps_data.lat_dir} -GPSLongitudeRef={gps_data.lon_dir} -GPSAltitudeRef={gps_data.altitude_units} {clip_path_mp4}")
+                    logging.info(f"Finished adding GPS data to clip: {gps_data_str}")
 
-                # open gps_data.csv and write the GPS data 
-                with open(os.path.join(self.clips_folder, "gps_data.csv"), "a") as f:
-                    f.write(f"{clip_name},{gps_data_str}\n")
+                    # open gps_data.csv and append the GPS data     
+                    with open(os.path.join(self.clips_folder, "gps_data.csv"), "a") as f:
+                        f.write(f"{clip_name},{gps_data_str}\n")
+                except Exception as e:  
+                    logging.error(f"Failed to add GPS data to clip: {e}")
 
     def list_clips(self, start_time, end_time):
         clips = []
