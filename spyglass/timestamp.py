@@ -45,7 +45,7 @@ class Timestamp:
         if (current_time - self.last_update_time) >= update_interval:
             self.last_temp, msg = self.check_CPU_temp()
             logging.info (self.last_temp) 
-            last_update_time = current_time
+            self.last_update_time = current_time
 
         timestamp = time.strftime("%Y-%m-%d %X")
 
