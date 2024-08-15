@@ -10,7 +10,6 @@ from . import logger
 import uvicorn
 from picamera2.encoders import MJPEGEncoder 
 from picamera2.outputs import FileOutput
-from spyglass.timestamp import apply_timestamp
 
 from spyglass.dvr import DVR
 from fastapi.responses import StreamingResponse

@@ -26,6 +26,7 @@ class DVR:
             try:
                 self.gps_serial = serial.Serial(gps_serial_port, 9600, timeout=1)
                 self.gps_available = True
+                logging.info(f"Opened GPS serial port {gps_serial_port}")
             except serial.SerialException as e:
                 logging.error(f"Failed to open GPS serial port {gps_serial_port}: {e}")
                 self.gps_available = False
@@ -64,6 +65,8 @@ class DVR:
         while True:
             clip_name = "clip_" + datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             clip_path_mp4 = os.path.join(self.clips_folder, clip_name + ".h264")
+
+            logging.info(f"Gathering GPS data : {self.gps_available} {self.gps_serial.in_waiting}")
 
             if self.gps_available and self.gps_serial.in_waiting:
                 gps_data = self.gps_serial.readline().decode("utf-8")

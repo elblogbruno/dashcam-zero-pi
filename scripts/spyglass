@@ -106,7 +106,13 @@ run_spyglass() {
     --orientation_exif "${ORIENTATION_EXIF:-h}" \
     --tuning_filter "${TUNING_FILTER:-}"\
     --tuning_filter_dir "${TUNING_FILTER_DIR:-}" \
-    --controls-string "${CONTROLS:-0=0}" # 0=0 to prevent error on empty string
+    --controls-string "${CONTROLS:-0=0}" \
+    --clips_folder "${CLIPS_FOLDER:-clips}" \
+    --quality_factor "${QUALITY_FACTOR:-20}" \
+    --clip_duration "${CLIP_DURATION:-10}" \
+    --clip_fps "${CLIP_FPS:-30}" \
+    --clip_resolution "${CLIP_RESOLUTION:-1920x1080}" \
+    --gps_serial_port "${GPS_SERIAL_PORT:-ttyACM0}" 
 }
 
 #### MAIN
