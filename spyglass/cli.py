@@ -214,7 +214,7 @@ def get_parser():
     parser.add_argument('--clip_fps', type=int, default=30, help='Frames per second of the video recording.')
     parser.add_argument('--clip_resolution', type=resolution_type, default='1920x1080',
                         help='Resolution of the images width x height. Maximum is 1920x1920.')
-    parser.add_argument('--gps_serial_port', type=str, default='ttyACM0', help='Serial port for GPS data.')
+    parser.add_argument('--gps_serial_port', type=str, default='/dev/ttyACM0', help='Serial port for GPS data.')
 
     return parser
 

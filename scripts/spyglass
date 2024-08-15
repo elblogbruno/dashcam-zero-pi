@@ -112,7 +112,7 @@ run_spyglass() {
     --clip_duration "${CLIP_DURATION:-10}" \
     --clip_fps "${CLIP_FPS:-30}" \
     --clip_resolution "${CLIP_RESOLUTION:-1920x1080}" \
-    --gps_serial_port "${GPS_SERIAL_PORT:-ttyACM0}" 
+    --gps_serial_port "${GPS_SERIAL_PORT:-\/dev\/ttyACM0}" 
 }
 
 #### MAIN
