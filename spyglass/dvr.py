@@ -108,14 +108,18 @@ class DVR:
                     if gps_data.startswith(b'$GPGGA'):
                         gps_data_parsed = pynmea2.parse(gps_data.decode("utf-8"))
                         self.last_gps_data = gps_data_parsed
-                        logging.info(f"GPS data: {gps_data_parsed}")
+                        gps_data_str = f"{gps_data.latitude} {gps_data.longitude}"
+
+                        logging.info(f"GPS data: {gps_data_str}")
+
+                        # append the GPS data to .csv file
+                        with open(os.path.join(self.clips_folder, "gps_data.csv"), "a") as f:
+                            f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{gps_data_str}\n")
+
                 except pynmea2.ParseError as e:
                     logging.error(f"Failed to parse GPS data: {e}")
 
-            # append the GPS data to .csv file
-            with open(os.path.join(self.clips_folder, "gps_data.csv"), "a") as f:
-                f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{gps_data}\n")
-
+            
 
     async def start_recording(self):
         import asyncio
