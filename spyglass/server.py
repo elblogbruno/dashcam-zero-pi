@@ -47,6 +47,7 @@ import asyncio
 async def lifespan(app: FastAPI):
     # Run at startup
     asyncio.create_task(dvr.start_recording())
+    asyncio.create_task(dvr.gather_gps())
     yield
     # Run on shutdown (if required)
     print('Shutting down...')
@@ -69,7 +70,7 @@ async def stream(request: Request):
 
     output = StreamingOutput()
     encoder = MJPEGEncoder()
-    camera.pre_callback = apply_timestamp
+    # camera.pre_callback = apply_timestamp
     camera.start_encoder(encoder, FileOutput(output), name="lores")
     # camera.start()
 
