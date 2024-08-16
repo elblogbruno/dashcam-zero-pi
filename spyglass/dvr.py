@@ -101,7 +101,14 @@ class DVR:
         self.picam2.stop_preview()
 
     async def gather_gps(self): 
+
+        update_interval = 4
+        last_update_time = 0  # seconds
+
+        import time
+        
         while True:
+
             if self.gps_available:
                 gps_data = self.gps_serial.readline()
                 try:
@@ -110,11 +117,17 @@ class DVR:
                         self.last_gps_data = gps_data_parsed
                         gps_data_str = f"{gps_data.latitude} {gps_data.longitude}"
 
-                        logging.info(f"GPS data: {gps_data_str}")
 
-                        # append the GPS data to .csv file
-                        with open(os.path.join(self.clips_folder, "gps_data.csv"), "a") as f:
-                            f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{gps_data_str}\n")
+                        current_time = time.time()
+        
+                        # Update temperature every `update_interval` seconds
+                        if (current_time - last_update_time) >= update_interval:
+                            logging.info(f"GPS data: {gps_data_str}")
+                            last_update_time = current_time
+
+                            # append the GPS data to .csv file
+                            with open(os.path.join(self.clips_folder, "gps_data.csv"), "a") as f:
+                                f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{gps_data_str}\n")
 
                 except pynmea2.ParseError as e:
                     logging.error(f"Failed to parse GPS data: {e}")
@@ -125,6 +138,8 @@ class DVR:
         import asyncio
         encoder = self._get_recording_encoder()
         # self.picam2.start()
+
+        self.recording = True
 
         while True:
             clip_name = "clip_" + datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -141,14 +156,17 @@ class DVR:
             #             logging.info(f"GPS data: {gps_data_parsed}")
             #     except pynmea2.ParseError as e:
             #         logging.error(f"Failed to parse GPS data: {e}")
-
-            logging.info(f"Recording clip: {clip_name}")
-            self.picam2.start_encoder(encoder, clip_path_mp4, name="main")
-            # sleep(self.clip_duration)
-            await asyncio.sleep(self.clip_duration)
-            # self.picam2.stop_encoder()
-            encoder.stop()
-            logging.info(f"Finished recording clip: {clip_name}")
+            try:
+                logging.info(f"Recording clip: {clip_name}")
+                self.picam2.start_encoder(encoder, clip_path_mp4, name="main")
+                # sleep(self.clip_duration)
+                await asyncio.sleep(self.clip_duration)
+                # self.picam2.stop_encoder()
+                encoder.stop()
+                logging.info(f"Finished recording clip: {clip_name}")
+            except asyncio.CancelledError:
+                logging.info("Recording cancelled.")
+                self.recording = False
 
             # # use ExifTool to add GPS data to the clip
             # if self.gps_available and self.last_gps_data:
@@ -174,8 +192,12 @@ class DVR:
                     clips.append({"name": clip, "path": clip_path, "size": os.path.getsize(clip_path), "created": os.path.getctime(clip_path)})
         return clips
 
-    def start_recording_thread(self):
-        self.thread = Thread(target=self._start_recording)
+    # def start_recording_thread(self):
+    #     self.thread = Thread(target=self._start_recording)
+    #     self.thread.start()
+
+    def start_gather_gps_thread(self):
+        self.thread = Thread(target=self.gather_gps)
         self.thread.start()
 
     def stop_recording(self):
@@ -183,4 +205,34 @@ class DVR:
             self.thread.join()
             self.picam2.stop()
 
- 
+    def status(self):
+        import os 
+
+        # get free memory
+        memory = os.popen("free -m").readlines()
+        memory = memory[1].split()
+
+        # get CPU temperature
+        temp = os.popen("vcgencmd measure_temp").readline()
+        temp = temp.replace("temp=", "").replace("'C\n", "")
+
+        os_info = {
+            "total": memory[1],
+            "used": memory[2],
+            "free": memory[3],
+            "shared": memory[4],
+            "buff/cache": memory[5],
+            "available": memory[6],
+            "cpu_temp": temp
+        }
+
+
+
+
+
+        return {
+            "recording": self.recording,
+            "gps_thread_alive": self.thread.is_alive() if self.thread else False, 
+            "gps_available": self.gps_available,
+            "os_info": os_info
+        }

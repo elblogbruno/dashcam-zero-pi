@@ -47,7 +47,7 @@ import asyncio
 async def lifespan(app: FastAPI):
     # Run at startup
     asyncio.create_task(dvr.start_recording())
-    asyncio.create_task(dvr.gather_gps())
+    dvr.start_gather_gps_thread()
     yield
     # Run on shutdown (if required)
     print('Shutting down...')
@@ -100,20 +100,18 @@ async def stream(request: Request):
 
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=FRAME")
 
-@app.get("/snapshot")
-async def snapshot(request: Request):
-    with output.condition:
-        output.condition.wait()
-        frame = output.frame 
-    return Response(frame, media_type="image/jpeg")
-
 @app.get("/videos")
 async def list_videos(start_time: int = 0, end_time: int = 0):
     return dvr.list_clips(start_time, end_time)
 
+@app.get("/status")
+async def status():
+    return dvr.status()
+
 @app.get("/videos/{clip_id}")
 async def stream_video_clip(clip_id: str):
-    file_path = f"{dvr.clips_folder}/{clip_id}.h264"
+    file_path = f"{dvr.clips_folder}/{clip_id}.h264" 
+
     def iterfile():
         with open(file_path, "rb") as file_like:
             yield from file_like

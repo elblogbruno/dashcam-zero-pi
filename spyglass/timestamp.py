@@ -44,7 +44,7 @@ class Timestamp:
         # Update temperature every `update_interval` seconds
         if (current_time - self.last_update_time) >= update_interval:
             self.last_temp, msg = self.check_CPU_temp()
-            logging.info (self.last_temp) 
+            logging.info (f"CPU temperature: {self.last_temp}°C")
             self.last_update_time = current_time
 
         timestamp = time.strftime("%Y-%m-%d %X")
