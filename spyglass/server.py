@@ -106,7 +106,7 @@ async def list_videos(start_time: int = 0, end_time: int = 0):
 
 @app.get("/status")
 async def status():
-    return dvr.status()
+    return dvr.get_system_status()
 
 @app.get("/videos/{clip_id}")
 async def stream_video_clip(clip_id: str):
