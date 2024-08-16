@@ -117,6 +117,10 @@ async def stream_video_clip(clip_id: str):
             yield from file_like
     return StreamingResponse(iterfile(), media_type="video/mp4")
 
+@app.get("/read_mode")
+async def read_mode():
+    # Stops this program recording 
+    exit(1)
 
 @app.get("/controls")
 async def controls(request: Request):

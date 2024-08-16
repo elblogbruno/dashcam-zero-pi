@@ -209,14 +209,27 @@ class DVR:
         memory_info = self.get_memory_info()
         cpu_temp = self.get_cpu_temperature()
 
+        # get available hardrive space and used 
+        disk = os.statvfs("/")
+        total = disk.f_bsize * disk.f_blocks
+        free = disk.f_bsize * disk.f_bavail
+
+
         os_info = {
+            "ram": {
             "total": memory_info["total"],
             "used": memory_info["used"],
             "free": memory_info["free"],
             "shared": memory_info["shared"],
             "buff_cache": memory_info["buff_cache"],
             "available": memory_info["available"],
-            "cpu_temp": cpu_temp
+            },
+            "cpu_temp": cpu_temp,
+            "disk": {
+                "total": f"{total / 1024 / 1024:.2f} MB",
+                "free": f"{free / 1024 / 1024:.2f} MB",
+                "used": f"{(total - free) / 1024 / 1024:.2f} MB"
+            }
         }
 
         return os_info
