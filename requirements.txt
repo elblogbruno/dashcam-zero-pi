@@ -1,1 +1,5 @@
 setuptools~=71.1.0
+pyserial
+pynmea2
+fastapi[standard]
+opencv-python
