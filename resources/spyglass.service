@@ -18,9 +18,9 @@ WantedBy=multi-user.target
 
 [Service]
 Type=simple
-User=%USER%
+User=root
 RemainAfterExit=Yes
-WorkingDirectory=/home/%USER%/spyglass
+WorkingDirectory=/root/dashcam-zero-pi
 ExecStart= /usr/local/bin/spyglass
 Restart=on-failure
 RestartSec=5

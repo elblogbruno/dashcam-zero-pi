@@ -12,6 +12,8 @@ import libcamera
 # from picamera2.encoders import MJPEGEncoder, H264Encoder
 # from picamera2.outputs import FileOutput
 
+
+
 from spyglass.exif import option_to_exif_orientation
 from spyglass.__version__ import __version__
 from spyglass.camera import init_camera
@@ -71,6 +73,10 @@ def main(args=None):
         controls,
         parsed_args.tuning_filter,
         parsed_args.tuning_filter_dir)
+
+
+    # preview_config = picam2.create_preview_configuration({"size": (640, 360)})
+    # picam2.configure(preview_config)
     
     clip_duration = parsed_args.clip_duration
 

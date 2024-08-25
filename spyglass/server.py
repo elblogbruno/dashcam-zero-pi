@@ -47,7 +47,8 @@ import asyncio
 async def lifespan(app: FastAPI):
     # Run at startup
     asyncio.create_task(dvr.start_recording())
-    dvr.start_gather_gps_thread()
+    await dvr.start_gather_gps_thread()
+    await dvr.start_gather_status_thread()
     yield
     # Run on shutdown (if required)
     print('Shutting down...')
