@@ -2,22 +2,31 @@ import logging
 import os
 import sys
 import datetime
-from time import sleep
+# from time import sleep
 from threading import Thread
 from picamera2.encoders import H264Encoder 
 import serial
 import pynmea2
 from picamera2.outputs import FfmpegOutput
+from upload_clips import UploadClips
 import telegram_send
 import asyncio
+from queue import Queue
 
 class DVR:
-    def __init__(self, picam2, clips_folder, resolution, fps, qf, clip_duration, gps_serial_port):
+    def __init__(self, picam2, clips_folder, resolution, fps, qf, clip_duration, update_interval, gps_serial_port, disk_alert_threshold, cpu_temp_alert_threshold, sftp_info):
         self.clips_folder = clips_folder
         self.resolution = resolution
         self.fps = fps
         self.qf = qf
         self.clip_duration = clip_duration
+        self.update_interval = update_interval
+        
+        self.disk_alert_threshold = disk_alert_threshold
+        self.cpu_temp_alert_threshold = cpu_temp_alert_threshold
+
+        self.sftp_user, self.sftp_password, self.sftp_server, self.sftp_dir = sftp_info # Info from SFTP COnnection to upload clips. It is a tuple
+
         self.picam2 = picam2
         self._init_clips_folder()
         self.thread = None
@@ -27,6 +36,7 @@ class DVR:
         self.is_recording = True
 
         self.gps_available = False
+
         
         if gps_serial_port: 
             try:
@@ -64,9 +74,16 @@ class DVR:
         encoder = H264Encoder(bitrate=bit_rate)
         return encoder
 
-    async def gather_status(self): 
+    async def gather_status(self, disk_alert_threshold, cpu_temp_alert_threshold):
         update_interval = 600
         last_update_time = 0  # seconds
+
+        last_disk_value = 0
+        last_cpu_temp = 0
+
+        # Define thresholds
+        # disk_alert_threshold = 0.10  # 10% free space
+        # cpu_temp_alert_threshold = 60.0  # 70°C
 
         import time
 
@@ -114,17 +131,15 @@ class DVR:
                    disk_free = float(data['os_info']['disk']['free'])
                    cpu_temp = float(data['os_info']['cpu_temp'])
 
-                   # Define thresholds
-                   disk_alert_threshold = 0.10  # 10% free space
-                   cpu_temp_alert_threshold = 60.0  # 70°C
-
                    # Check for disk space warning
-                   if disk_free / disk_total < disk_alert_threshold:
+                   current_disk_value = disk_free / disk_total
+                   if current_disk_value < disk_alert_threshold and current_disk_value < last_disk_value:
+                       last_disk_value = disk_free / disk_total
                        disk_warning_message = f"⚠️ *Disk Space Warning* ⚠️\n\nOnly {disk_free:.2f} MB ({(disk_free / disk_total) * 100:.2f}%) free out of {disk_total:.2f} MB. Consider freeing up space!"
                        await telegram_send.send(messages=[disk_warning_message], parse_mode='Markdown')
 
                    # Check for high CPU temperature warning
-                   if cpu_temp > cpu_temp_alert_threshold:
+                   if cpu_temp > cpu_temp_alert_threshold and cpu_temp > last_cpu_temp: 
                        temp_warning_message = f"🔥 *High CPU Temperature Warning* 🔥\n\nCPU temperature is {cpu_temp}°C. Please check your cooling system!"
                        await telegram_send.send(messages=[temp_warning_message], parse_mode='Markdown')
           
@@ -160,34 +175,41 @@ class DVR:
                             with open(os.path.join(self.clips_folder, "gps_data.csv"), "a") as f:
                                 f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{gps_data_str}\n")
 
+                        # self.gps_queue.put(gps_data_parsed)
+
                 except pynmea2.ParseError as e:
                     logging.error(f"Failed to parse GPS data: {e}")
 
             
-    def upload_clips_function(self, today_folder):
-        import subprocess
-        script_to_run = "spyglass/uploads_clips.py"
+    # def upload_clips_function(self, today_folder):
+    #     import subprocess
+    #     script_to_run = "spyglass/uploads_clips.py"
 
-        logging.info("Current working directory:", os.getcwd())
-        logging.info(script_to_run)
+    #     logging.info("Current working directory:", os.getcwd())
+    #     logging.info(script_to_run)
 
-        try:
-            # Call the other Python script with today_folder as an argument
-            logging.info(today_folder)
-            subprocess.call(['python3', script_to_run, today_folder])
-            logging.info(f"Successfully called {script_to_run} with argument: {today_folder}")
-        except subprocess.CalledProcessError as e:
-            logging.info(f"Error calling script: {e}")
+    #     try:
+    #         # Call the other Python script with today_folder as an argument
+    #         logging.info(today_folder)
+    #         subprocess.call(['python3', script_to_run, today_folder])
+    #         logging.info(f"Successfully called {script_to_run} with argument: {today_folder}")
+    #     except subprocess.CalledProcessError as e:
+    #         logging.info(f"Error calling script: {e}")
 
     async def start_recording(self):
         import asyncio
+        import time 
+
         encoder = self._get_recording_encoder()
 
-        
+        last_update_time = 0
+        update_interval = self.update_interval # every X seconds we record X time video.
+
         last_day  = ""
         today_folder = last_day
         
         while True:
+
             clip_name = "TMP_clip_" + datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             clip_path_mp4 = os.path.join(self.clips_folder, clip_name + ".h264")
 
@@ -203,57 +225,68 @@ class DVR:
 
                 logging.info(f"Starting sync script for {today}")
 
-                # Create a new thread to run the upload_clips_function
-                upload_thread = Thread(target=self.upload_clips_function, args=(today_folder,))
+                self.upload_clips_manager = UploadClips(today_folder, self.sftp_user, self.sftp_password, self.sftp_server, self.sftp_dir, retry_delay=10)
 
-                # Start the thread
-                upload_thread.start()
+                # # Create a new thread to run the upload_clips_function
+                # upload_thread = Thread(target=self.upload_clips_function, args=(today_folder,))
+
+                # # Start the thread
+                # upload_thread.start()
                 
 
             clip_path_mp4 = os.path.join(today_folder, clip_name + ".mp4") #".h264")
             output = FfmpegOutput(clip_path_mp4)
 
-            try:
-                logging.info(f"Recording clip: {clip_name}")
-                # self.picam2.start_encoder(encoder, clip_path_mp4, name="main")
-                self.picam2.start_recording(encoder, output, name="main")
-                # sleep(self.clip_duration)
-                #output.start()
-                await asyncio.sleep(self.clip_duration)
-	            # self.picam2.stop_encoder()
-                encoder.stop()
-                #output.stop()
-                #self.picam2.stop_recording()
-                logging.info(f"Finished recording clip: {clip_name}")
-            except asyncio.CancelledError:
-                logging.info("Recording cancelled.")
-                self.is_recording = False
+            current_time = time.time()
 
-            # # use ExifTool to add GPS data to the clip
-            # if self.gps_available and self.last_gps_data:
-            #     gps_data = self.last_gps_data
-            #     try:
-            #         gps_data_str = f"{gps_data.latitude} {gps_data.longitude}"
-            #         logging.info(f"Adding GPS data to clip: {gps_data_str}")
-            #         os.system(f"exiftool -GPSLatitude={gps_data.latitude} -GPSLongitude={gps_data.longitude} -GPSAltitude={gps_data.altitude} -GPSLatitudeRef={gps_data.lat_dir} -GPSLongitudeRef={gps_data.lon_dir} -GPSAltitudeRef={gps_data.altitude_units} {clip_path_mp4}")
-            #         logging.info(f"Finished adding GPS data to clip: {gps_data_str}")
+            # Record X seconds video after every update_interval or every time if its 0
+            if update_interval == 0 or (current_time - last_update_time) >= update_interval:
+                last_update_time = current_time
 
-            #         # open gps_data.csv and append the GPS data     
-            #         with open(os.path.join(self.clips_folder, "gps_data.csv"), "a") as f:
-            #             f.write(f"{clip_name},{gps_data_str}\n")
-            #     except Exception as e:  
-            #         logging.error(f"Failed to add GPS data to clip: {e}")
+                try:
+                    logging.info(f"Recording clip: {clip_name}")
+                    # self.picam2.start_encoder(encoder, clip_path_mp4, name="main")
+                    self.picam2.start_recording(encoder, output, name="main")
+                    # sleep(self.clip_duration)
+                    #output.start()
+                    await asyncio.sleep(self.clip_duration)
+                    # self.picam2.stop_encoder()
+                    encoder.stop()
+                    #output.stop()
+                    #self.picam2.stop_recording()
+                    logging.info(f"Finished recording clip: {clip_name}")
+                except asyncio.CancelledError:
+                    logging.info("Recording cancelled.")
+                    self.is_recording = False
+
+                # # use ExifTool to add GPS data to the clip
+                # if self.gps_available and self.last_gps_data:
+                #     gps_data = self.last_gps_data
+                #     try:
+                #         gps_data_str = f"{gps_data.latitude} {gps_data.longitude}"
+                #         logging.info(f"Adding GPS data to clip: {gps_data_str}")
+                #         os.system(f"exiftool -GPSLatitude={gps_data.latitude} -GPSLongitude={gps_data.longitude} -GPSAltitude={gps_data.altitude} -GPSLatitudeRef={gps_data.lat_dir} -GPSLongitudeRef={gps_data.lon_dir} -GPSAltitudeRef={gps_data.altitude_units} {clip_path_mp4}")
+                #         logging.info(f"Finished adding GPS data to clip: {gps_data_str}")
+
+                #         # open gps_data.csv and append the GPS data     
+                #         with open(os.path.join(self.clips_folder, "gps_data.csv"), "a") as f:
+                #             f.write(f"{clip_name},{gps_data_str}\n")
+                #     except Exception as e:  
+                #         logging.error(f"Failed to add GPS data to clip: {e}")
 
 
-            # After writing the clip
-            tmp_file = clip_path_mp4
-            final_file = tmp_file.replace("TMP_", "", 1)  # Replace only the first occurrence
+                # After writing the clip
+                tmp_file = clip_path_mp4
+                final_file = tmp_file.replace("TMP_", "", 1)  # Replace only the first occurrence
 
-            try:
-                os.rename(tmp_file, final_file)
-                logging.info(f"Clip renamed: {final_file}")
-            except Exception as e:
-                logging.info(f"Failed to rename file: {e}")
+
+                try:
+                    os.rename(tmp_file, final_file)
+                    logging.info(f"Clip renamed: {final_file}")
+                    self.upload_clips_manager.add_file_to_queue(file_path=final_file)
+                except Exception as e:
+                    logging.info(f"Failed to rename file: {e}")
+            
 
     def list_clips(self, start_time, end_time):
         clips = []
@@ -269,7 +302,8 @@ class DVR:
         self.thread.start()
 
     async def start_gather_status_thread(self):
-        self.thread_1 = Thread(target=asyncio.run, args=(self.gather_status(),))
+        logging.info(f"Starting status thread with {self.disk_alert_threshold} {self.cpu_temp_alert_threshold}")
+        self.thread_1 = Thread(target=asyncio.run, args=(self.gather_status(self.disk_alert_threshold, self.cpu_temp_alert_threshold),))
         self.thread_1.start()
  
     def get_memory_info(self):

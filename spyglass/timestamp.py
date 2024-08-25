@@ -55,6 +55,7 @@ class Timestamp:
         # is_recording = self.check_recording_status()  # Assuming this function exists to check if recording
         is_recording = self.dvr.is_recording
 
+        # TODO: Fix icon loading
         # Load the recording icon
         # recording_icon = cv2.imread("/assets/recording_icon.png", cv2.IMREAD_UNCHANGED)
         icon_size = (50, 50)  # Resize icon if needed
@@ -69,7 +70,7 @@ class Timestamp:
                 cv2.putText(m.array, f"GPS: {last_gps_data}", (0, 90), font, scale, colour, thickness)
             
             # Add recording icon and text if recording
-            # if is_recording:
+            if is_recording:
             #     icon_origin = (m.array.shape[1] - icon_size[0] - 10, 10)  # Position icon at top-right
             #     m.array[10:10+icon_size[1], -10-icon_size[0]:-10] = recording_icon  # Overlay icon on the frame
-            #     cv2.putText(m.array, "REC", (m.array.shape[1] - 80, 60), font, scale, colour, thickness)
+                cv2.putText(m.array, "REC", (m.array.shape[1] - 80, 60), font, scale, colour, thickness)

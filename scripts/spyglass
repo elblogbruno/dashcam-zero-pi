@@ -110,9 +110,16 @@ run_spyglass() {
     --clips_folder "${CLIPS_FOLDER:-clips}" \
     --quality_factor "${QUALITY_FACTOR:-20}" \
     --clip_duration "${CLIP_DURATION:-10}" \
+    --update_interval "${UPDATE_INTERVAL:-300}" \
     --clip_fps "${CLIP_FPS:-30}" \
     --clip_resolution "${CLIP_RESOLUTION:-1920x1080}" \
-    --gps_serial_port "${GPS_SERIAL_PORT:-\/dev\/ttyACM0}" 
+    --gps_serial_port "${GPS_SERIAL_PORT:-\/dev\/ttyACM0}" \
+    --disk_alert_threshold "${DISK_ALERT_THRESHOLD:-0.10}" \
+    --cpu_temp_alert_threshold "${CPU_TEMP_ALERT_THRESHOLD:-60.0}" \
+    --sftp_user "${SFTP_USER:-\/root}" \
+    --sftp_password "${SFTP_PASSWORD:-\/root}" \
+    --sftp_server "${SFTP_SERVER:-\/127.0.0.1}" \
+    --sftp_dir "${SFTP_DIR:-\/clips}" 
 }
 
 #### MAIN

@@ -58,6 +58,7 @@ def main(args=None):
         return
     
 
+
     picam2 = init_camera(
         clip_width,
         clip_height,
@@ -75,22 +76,20 @@ def main(args=None):
         parsed_args.tuning_filter_dir)
 
 
-    # preview_config = picam2.create_preview_configuration({"size": (640, 360)})
-    # picam2.configure(preview_config)
-    
     clip_duration = parsed_args.clip_duration
 
+    sftp_info = (parsed_args.sftp_user, parsed_args.sftp_password, parsed_args.sftp_server, parsed_args.sftp_dir)
 
-    # output = StreamingOutput()
-    # picam2.start_recording(MJPEGEncoder(), FileOutput(output))
-
-    # time.sleep(1)
-
-    # init_dvr(parsed_args)
-    
-    # start_recording_thread(picam2, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, parsed_args.clips_folder, clip_duration)
-    dvr = DVR(picam2, parsed_args.clips_folder, (clip_width, clip_height), parsed_args.clip_fps, parsed_args.quality_factor, clip_duration, parsed_args.gps_serial_port)
-    # dvr.start_recording_thread()
+    dvr = DVR(picam2, 
+              parsed_args.clips_folder, 
+              (clip_width, clip_height), 
+              parsed_args.clip_fps, 
+              parsed_args.quality_factor, 
+              clip_duration, parsed_args.update_interval
+              , parsed_args.gps_serial_port, 
+              parsed_args.disk_alert_threshold, 
+              parsed_args.cpu_temp_alert_threshold, 
+              sftp_info)
     
     timestamp = Timestamp(picam2, dvr)
     picam2.start()
@@ -208,7 +207,7 @@ def get_parser():
     parser.add_argument('-cs', '--controls-string', default='', type=str,
                         help='Define camera controls to start with spyglass. '
                              'Input as a long string.\n'
-                             'Format: <control1>=<value1> <control2>=<value2>')
+                             'Format: <control1>=<value1> <control2>=<valuparsed_args.e2>')
     parser.add_argument('-tf', '--tuning_filter', type=str, default=None, nargs='?', const="",
                         help='Set a tuning filter file name.')
     parser.add_argument('-tfd', '--tuning_filter_dir', type=str, default=None, nargs='?',const="",
@@ -217,10 +216,21 @@ def get_parser():
     parser.add_argument('--clips_folder', type=str, default="clips", help='Folder to store DVR clips.')
     parser.add_argument('-qf', '--quality_factor', type=int, default=20, help='Quality factor for the video recording.')
     parser.add_argument('--clip_duration', type=int, default=10, help='Duration of each clip in seconds.')
+    parser.add_argument('--update_interval', type=int, default=300, help="Update interval to record videos (set 0 to record always.) Records X seconds video after every X update interval")
     parser.add_argument('--clip_fps', type=int, default=30, help='Frames per second of the video recording.')
     parser.add_argument('--clip_resolution', type=resolution_type, default='1920x1080',
                         help='Resolution of the images width x height. Maximum is 1920x1920.')
     parser.add_argument('--gps_serial_port', type=str, default='/dev/ttyACM0', help='Serial port for GPS data.')
+
+    parser.add_argument('--disk_alert_threshold', type=float, default=0.10, help="Disk Space Threshold to Send warning.")
+    parser.add_argument('--cpu_temp_alert_threshold', type=float, default=65.0, help="CPU Temp Threshold to Send warning.")
+
+    parser.add_argument('--sftp_user', type=str, default="root", help="SFTP User")
+    parser.add_argument('--sftp_password', type=str, default="root", help="SFTP Server password.")
+    parser.add_argument('--sftp_server', type=str, default="127.0.0.1", help="SFTP Server url.")
+    parser.add_argument('--sftp_dir', type=str, default="/", help="SFTP Server dir to store clips.")
+
+
 
     return parser
 
