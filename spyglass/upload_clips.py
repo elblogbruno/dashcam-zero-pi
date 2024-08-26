@@ -61,7 +61,7 @@ class UploadClips:
     def create_sftp_connection(self):
         """Create and return an SFTP connection."""
         try:
-            transport = paramiko.Transport((self.s, 22))
+            transport = paramiko.Transport((self.sftp_server, 22))
             transport.connect(username=self.sftp_user, password=self.sftp_password)
             sftp = paramiko.SFTPClient.from_transport(transport)
             return sftp

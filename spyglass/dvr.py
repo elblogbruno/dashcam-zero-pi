@@ -8,7 +8,7 @@ from picamera2.encoders import H264Encoder
 import serial
 import pynmea2
 from picamera2.outputs import FfmpegOutput
-from upload_clips import UploadClips
+from .upload_clips import UploadClips
 import telegram_send
 import asyncio
 from queue import Queue
@@ -286,6 +286,9 @@ class DVR:
                     self.upload_clips_manager.add_file_to_queue(file_path=final_file)
                 except Exception as e:
                     logging.info(f"Failed to rename file: {e}")
+
+            else:
+                logging.info(f"Sleeping. Not recording")
             
 
     def list_clips(self, start_time, end_time):
